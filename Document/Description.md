@@ -63,7 +63,7 @@
 
 ![image-20210415111957235](Description.assets/image-20210415111957235.png)
 
-
+数据回读SDO在上升沿发送，在下降沿可以进行读取
 
 # 4 寄存器配置
 
@@ -137,3 +137,33 @@
 |      | 9     | X     | Valid | Valid | Valid | Valid |
 
 回传的最后16位对应的是【DB19,DB4】的内容
+
+# 5控制帧结构
+
+## 控制帧
+
+每个序号代表16-bit
+
+| 序号 | 名称            | 含义      | 值                             |
+| ---- | --------------- | --------- | ------------------------------ |
+| 0-1  | FLAG_MOTOR      | 标识位    | E1EC_0C0D                      |
+| 2    | motor_state     | 电机状态  | 0xEAEA：启动<br />others：停止 |
+| 3    | motor_direction | 电机方向  | 0x1EAF：正转<br />others：反转 |
+| 4    | dac_voltage     | DAC电压值 | 低10bit有效                    |
+|      |                 |           |                                |
+|      |                 |           |                                |
+|      |                 |           |                                |
+
+## 返回帧
+
+每个序号代表16-bit
+
+| 序号 | 名称            | 含义        | 值                                     |
+| ---- | --------------- | ----------- | -------------------------------------- |
+| 0-1  | FLAG_MOTOR      | 标识位      | E1EC_0C0D                              |
+| 2    | motor_state     | 电机状态    | 0xEAEA：启动<br />others：停止         |
+| 3    | motor_direction | 电机方向    | 0x1EAF：正转<br />others：反转         |
+| 4    | dac_voltage     | DAC电压值   | 低10bit有效                            |
+| 5    | dac_complete    | DAC设定完成 | 0xFBFB：设定成功<br />others：设定失败 |
+|      |                 |             |                                        |
+|      |                 |             |                                        |
