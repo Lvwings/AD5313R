@@ -1,0 +1,21 @@
+{
+  signal: [
+    {name: 'clk_200m',	 				wave: 'P..|...............................',													period: 1},
+                {name:'sclk',			wave: 'N|...|..',																				period: 5,	phase: 4.5,
+                						node: '...de..f'},
+				{name:'sync',			wave: '1..|.........0...................1.',													period: 1,
+                 						node: 'a............b...................c.'},
+
+                {name:'sdin',			wave: 'x............3....4....5.|..6....x.',				data: ["MSB","D22","","LSB"],		period: 1},
+    
+    			{name:'reset',			wave: '0..1|...0..........................',													period: 1,
+                						node: '...g....h..........................'}
+          ],
+	head:{
+             text:'Timing',
+      		 tick:0
+         },
+	edge:[	
+          'a~b 270ns' , 'b~d 12.5ns' ,'b~e 12.5ns' ,'c~f 12.5ns','g~h 100ns'
+      	]
+}
