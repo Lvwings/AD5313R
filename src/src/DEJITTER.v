@@ -35,7 +35,7 @@ module DEJITTER#(
 
     always @(posedge sys_clk) begin
     	if(sys_rst) begin
-    		signal_hold <= 0;
+    		signal_hold <= {C_HOLD_BIT_NUMBER{!C_INPUT_POLARITY}};
     	end else begin
     		signal_hold <= {signal_hold[C_HOLD_BIT_NUMBER - 2 : 0],signal_in};
     	end

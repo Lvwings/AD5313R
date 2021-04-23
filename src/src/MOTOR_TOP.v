@@ -140,7 +140,9 @@ module MOTOR_TOP#(
  	output			m1,
  	output			alarm_reset,
  	input			speed_out,
- 	input			alarm_out_n	
+ 	input			alarm_out_n,
+ //	trigger
+ 	output			trig_ad_convst
 
     );
 
@@ -255,7 +257,8 @@ module MOTOR_TOP#(
 			.motor_direction   (motor_direction),
 			.motor_alarm_reset (motor_alarm_reset),
 			.alarm_in_n        (alarm_in_n),
-			.alarm_reset       (alarm_reset)
+			.alarm_reset       (alarm_reset),
+			.trig_ad_convst    (trig_ad_convst)
 		);
 
 

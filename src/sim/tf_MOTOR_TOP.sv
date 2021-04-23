@@ -33,14 +33,14 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	logic sys_rst;
 	initial begin
 		sys_rst <= '1;
-		repeat(10)@(posedge sys_clk)
+		# 100
 		sys_rst <= '0;
 	end
 
 	// (*NOTE*) replace reset, clock, others
 
 	parameter       C_AXI_ID_WIDTH = 4;
-	parameter     C_AXI_ADDR_WIDTH = 32;
+	parameter     C_AXI_ADDR_WIDTH = 16;
 	parameter     C_AXI_DATA_WIDTH = 64;
 	parameter C_AXI_NBURST_SUPPORT = 1'b0;
 	parameter     C_AXI_BURST_TYPE = 2'b00;
@@ -134,6 +134,7 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	logic                          alarm_reset;
 	logic                          speed_out;
 	logic                          alarm_out_n;
+	logic                          trig_ad_convst;
 
 	MOTOR_TOP #(
 			.C_AXI_ID_WIDTH(C_AXI_ID_WIDTH),
@@ -230,7 +231,8 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 			.m1             (m1),
 			.alarm_reset    (alarm_reset),
 			.speed_out      (speed_out),
-			.alarm_out_n    (alarm_out_n)
+			.alarm_out_n    (alarm_out_n),
+			.trig_ad_convst (trig_ad_convst)
 		);
 
 	task init();
@@ -258,8 +260,6 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 		saxi_rprot     <= '0;
 		saxi_rvalid    <= '0;
 		saxi_rd_rready <= '0;
-		maxi_wready    <= '0;
-		maxi_wd_wready <= '0;
 		maxi_wb_bid    <= '0;
 		maxi_wb_bresp  <= '0;
 		maxi_rready    <= '0;
@@ -520,7 +520,7 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	// Write channel data signals
 	//*****************************************************************************	
 		localparam	CMD_DATA	=	10'h078;
-		reg [9:0]	cmd_data	=	CMD_DATA;
+		reg [9:0]	cmd_data	=	10'h008;
 		always_ff @(posedge sys_clk) begin
 			if(saxi_wb_bvalid && saxi_wb_bready) begin
 				cmd_data <= cmd_data + 1;
