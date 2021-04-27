@@ -237,7 +237,7 @@ module DAC_CTRL  #(
 									DAC_WRITE        = 4'd7,
 									DAC_READ         = 4'd8;                               
 	//	use one-hot encode								
-   	reg [8:0]                       s_write_state      =   0,
+   (* keep="true" *) reg [8:0]                       s_write_state      =   0,
 									s_write_next       =   0;
 
 	reg [WATCH_DOG_WIDTH : 0]       s_wt_watch_dog_cnt =   0;          
@@ -288,7 +288,7 @@ module DAC_CTRL  #(
 			end
 
 			s_write_state[S_WRITE_DATA] :	begin 
-				if (saxi_wd_wvalid && saxi_wd_wready && saxi_wd_wlast)
+				if (flag_read_over)
 					s_write_next[S_WRITE_RESPONSE]	=	1;
 				else
 					s_write_next[S_WRITE_DATA]		=	1;
@@ -361,9 +361,13 @@ module DAC_CTRL  #(
 	reg	[2:0]	read_in_cnt 	=	0;
 	reg			dac_complete	=	1'b0;
 
+	reg [31:0]	time_set		=	0;
+	reg			flag_read_over	=	1'b0;
+
 	always @(posedge sys_clk) begin
 		if(sys_rst) begin
 			dac_voltage	<=	0;
+			time_set	<=	0;
 		end else begin
 			case (1)
 				s_write_next[S_WRITE_IDLE]	:	begin 
@@ -380,6 +384,7 @@ module DAC_CTRL  #(
 												flag_dac_sync_over	<=	0;
 												flag_dac_write_over	<=	0;
 												flag_dac_reset_over	<=	0;
+												flag_read_over		<=	0;
 
 												o_motor_state	<=	alarm_reset ? 0 : o_motor_state;
 				end	
@@ -389,14 +394,24 @@ module DAC_CTRL  #(
 													sclk_cnt	<=	sclk_cnt + 1;
 												else
 													sclk_cnt	<=	sclk_cnt;
+
+												case (sclk_cnt)
+													5'd1	:	begin 
+														o_motor_state		<=	(s_wd_wdata[63:48] == MOTOR_ENABLE);
+														o_moter_direction	<=	(s_wd_wdata[47:32] == MOTOR_POSITVE);
+														dac_voltage			<=	 s_wd_wdata[25:16];
+														o_alarm_reset		<=	(s_wd_wdata[15:00] == ALARM_RESET);															
+													end
+													5'd2	:	begin 
+														time_set			<=	s_wd_wdata[63:32];
+														flag_read_over		<=	1;
+													end
+													default : /* default */;
+												endcase											
 				end
 
 				s_write_next[S_WRITE_RESPONSE]	:	begin 
-												sclk_cnt	<=	0;
-												o_motor_state		<=	(s_wd_wdata[63:48] == MOTOR_ENABLE);
-												o_moter_direction	<=	(s_wd_wdata[47:32] == MOTOR_POSITVE);
-												dac_voltage			<=	 s_wd_wdata[25:16];
-												o_alarm_reset		<=	(s_wd_wdata[15:00] == ALARM_RESET);																			
+												sclk_cnt	<=	0;																		
 				end
 
 				s_write_next[DAC_RESET]			:	begin 
@@ -475,14 +490,15 @@ module DAC_CTRL  #(
 //*****************************************************************************
 // trig ad convst
 //*****************************************************************************			
-reg	[15:0]	trig_cnt	=	0;
+reg	[31:0]	trig_cnt	=	0;
+
 always @(posedge sys_clk) begin
 	if(sys_rst) begin
 		 trig_cnt	<=	0;
 		 o_trig_ad	<=	0;
 	end else begin
 		 if (motor_state) begin 
-		 	if (trig_cnt == {dac_voltage,6'h0}) begin 
+		 	if (trig_cnt == time_set) begin 
 			 	trig_cnt	<=	0;
 			 	o_trig_ad	<=	1;		 		
 		 	end
@@ -665,7 +681,7 @@ end
 									M_WRITE_RESPONSE = 4'd3,
 									M_WRITE_TIME_OUT = 4'd4;								
 	//	use one-hot encode								
-    reg [4:0]                       m_write_state      =   0,
+       (* keep="true" *) reg [4:0]                       m_write_state      =   0,
 									m_write_next       =   0;
 
 	reg [WATCH_DOG_WIDTH : 0]       m_wt_watch_dog_cnt	=   0;      
@@ -712,7 +728,7 @@ end
 			data2eth[47:32]	<=	motor_direction ? MOTOR_POSITVE : 0;
 			data2eth[31:16]	<=	dac_voltage;
 			data2eth[15:00]	<=	!alarm_in_n ? ALARM_OUT : 0;
-			data_sum		<=	data2eth[63:48] + data2eth[47:32] + data2eth[31:16] + data2eth[15:00] + data_complete + alarm_complete; 
+			data_sum		<=	data2eth[63:48] + data2eth[47:32] + data2eth[31:16] + data2eth[15:00] + data_complete + alarm_complete + time_set[31:16] + time_set[15:00]; 
 		end else if (maxi_wb_bvalid && maxi_wb_bready) begin
 			data2eth 	<=	0;
 			data_sum	<=	0;
@@ -878,7 +894,7 @@ always @(*) begin
 			else 
 				if (maxi_wd_wvalid && maxi_wd_wready)
 					case (m_write_data_cnt - 1)
-						8'd0	:	m_wd_wdata	<=	{data_complete,alarm_complete};		
+						8'd0	:	m_wd_wdata	<=	{data_complete,alarm_complete,time_set};		
 						default : 	m_wd_wdata	<=	0;
 					endcase
 				else if (m_write_data_cnt == maxi_wlen)

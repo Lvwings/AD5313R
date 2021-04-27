@@ -148,15 +148,15 @@
 
 每个序号代表16-bit
 
-| 序号 | 名称            | 含义      | 值                             |
-| ---- | --------------- | --------- | ------------------------------ |
-| 0-1  | FLAG_MOTOR      | 标识位    | E1EC_0C0D                      |
-| 2    | motor_state     | 电机状态  | 0xEAEA：启动<br />others：停止 |
-| 3    | motor_direction | 电机方向  | 0x1EAF：正转<br />others：反转 |
-| 4    | dac_voltage     | DAC电压值 | 低10bit有效                    |
-| 5    | alarm_reset     | 复位警报  | 0xAAED：复位<br />others：正常 |
-|      |                 |           |                                |
-|      |                 |           |                                |
+| 序号 | 名称            | 含义         | 值                             |
+| ---- | --------------- | ------------ | ------------------------------ |
+| 0-1  | FLAG_MOTOR      | 标识位       | E1EC_0C0D                      |
+| 2    | motor_state     | 电机状态     | 0xEAEA：启动<br />others：停止 |
+| 3    | motor_direction | 电机方向     | 0x1EAF：正转<br />others：反转 |
+| 4    | dac_voltage     | DAC电压值    | 低10bit有效                    |
+| 5    | alarm_reset     | 复位警报     | 0xAAED：复位<br />others：正常 |
+| 6-7  | time_set        | 采样间隔时钟 |                                |
+|      |                 |              |                                |
 
 ## 返回帧
 
@@ -171,3 +171,4 @@
 | 5    | alarm_out       | 警报发生     | 0xAAAA：警报发生<br />others：正常     |
 | 6    | dac_complete    | DAC设定完成  | 0xFBFB：设定成功<br />others：设定失败 |
 | 7    | alarm_complete  | 警报复位完成 | 0xAAED：复位<br />others：正常         |
+| 8-9  | time_set        | 采样间隔时钟 |                                        |

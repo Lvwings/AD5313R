@@ -320,35 +320,35 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	
 	// AXI m_write address channel signals
 	
-		reg	[C_AXI_ID_WIDTH-1:0]		m_wid 		=	0;
-		reg	[C_AXI_ADDR_WIDTH-1:0]		m_waddr		=	0;
-		reg	[7:0]						m_wlen		=	0;
-		reg	[1:0]						m_wburst	=	0;
-		reg								m_wvalid	=	1'b0;
+		reg	[C_AXI_ID_WIDTH-1:0]		s_wid 		=	0;
+		reg	[C_AXI_ADDR_WIDTH-1:0]		s_waddr		=	0;
+		reg	[7:0]						s_wlen		=	0;
+		reg	[1:0]						s_wburst	=	0;
+		reg								s_wvalid	=	1'b0;
 	
 	// AXI m_write data channel signals
 	
-		reg	[C_AXI_DATA_WIDTH-1:0]		m_wd_wdata		=	0;
-		reg	[C_AXI_DATA_WIDTH/8-1:0]	m_wd_wstrb		=	0;
-		reg								m_wd_wlast		=	1'b0;
-		reg								m_wd_wvalid		=	1'b0;
+		reg	[C_AXI_DATA_WIDTH-1:0]		s_wd_wdata		=	0;
+		reg	[C_AXI_DATA_WIDTH/8-1:0]	s_wd_wstrb		=	0;
+		reg								s_wd_wlast		=	1'b0;
+		reg								s_wd_wvalid		=	1'b0;
 	
 	// AXI m_write response channel signals
 		
-		reg								m_wb_ready 	=	1'b0;
+		reg								s_wb_ready 	=	1'b0;
 	
 	// AXI read address channel signals
 	
-		reg	[C_AXI_ID_WIDTH-1:0]		m_rid 		=	0;
-		reg	[C_AXI_ADDR_WIDTH-1:0]		m_raddr		=	0;
-		reg	[7:0]						m_rlen		=	0;
-		reg	[2:0]						m_rsize		=	0;
-		reg	[1:0]						m_rburst	=	0;
-		reg								m_rvalid	=	1'b0;
+		reg	[C_AXI_ID_WIDTH-1:0]		s_rid 		=	0;
+		reg	[C_AXI_ADDR_WIDTH-1:0]		s_raddr		=	0;
+		reg	[7:0]						s_rlen		=	0;
+		reg	[2:0]						s_rsize		=	0;
+		reg	[1:0]						s_rburst	=	0;
+		reg								s_rvalid	=	1'b0;
 	
 	// AXI read data channel signals
 		
-		reg								 m_rd_rready	=	1'b0;
+		reg								 s_rd_rready	=	1'b0;
 	//*****************************************************************************
 	// AXI support signals
 	//*****************************************************************************	
@@ -370,12 +370,12 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 		//								M_WRITE_RESPONSE = 4'd3,
 		//								M_WRITE_TIME_OUT = 4'd4;								
 		//	use one-hot encode								
-	    reg [4:0]                       m_write_state      =   0,
-										m_write_next       =   0;
+	    reg [4:0]                       s_write_state      =   0,
+										s_write_next       =   0;
 	
-		reg [WATCH_DOG_WIDTH : 0]       m_wt_watch_dog_cnt=   0;      
-		reg	[7:0]						m_write_data_cnt	=	0;    
-		reg                             trig_m_write_start 	=   1'b0;
+		reg [WATCH_DOG_WIDTH : 0]       s_wt_watch_dog_cnt=   0;      
+		reg	[7:0]						s_write_data_cnt	=	0;    
+		reg                             trig_s_write_start 	=   1'b0;
 	//*****************************************************************************
 	// Write channel control signals
 	//*****************************************************************************	
@@ -390,9 +390,9 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 
 		always @(posedge sys_clk) begin
 			if(sys_rst) begin
-				trig_m_write_start <= 0;
+				trig_s_write_start <= 0;
 			end else begin
-				trig_m_write_start <= (time_cnt == 12'h050);			//	user setting
+				trig_s_write_start <= (time_cnt == 12'h050);			//	user setting
 			end
 		end
 
@@ -408,48 +408,48 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	//*****************************************************************************
 		always @(posedge sys_clk) begin
 			if(sys_rst) begin
-				m_write_state <= 1;
+				s_write_state <= 1;
 			end else begin
-				m_write_state	<= m_write_next;
+				s_write_state	<= s_write_next;
 			end
 		end
 	
 	always @(*) begin
-			m_write_next	=	0;		//	next state reset
+			s_write_next	=	0;		//	next state reset
 			case (1)
-				m_write_state[M_WRITE_IDLE]	:	begin 
-					if (trig_m_write_start)
-						m_write_next[M_WRITE_ADDR]		=	1;
+				s_write_state[M_WRITE_IDLE]	:	begin 
+					if (trig_s_write_start)
+						s_write_next[M_WRITE_ADDR]		=	1;
 					else
-						m_write_next[M_WRITE_IDLE]		=	1;
+						s_write_next[M_WRITE_IDLE]		=	1;
 				end
 	
-				m_write_state[M_WRITE_ADDR]	:	begin 
+				s_write_state[M_WRITE_ADDR]	:	begin 
 					if (saxi_wready && saxi_wvalid)
-						m_write_next[M_WRITE_DATA]		=	1;
+						s_write_next[M_WRITE_DATA]		=	1;
 					else
-						m_write_next[M_WRITE_ADDR]		=	1;
+						s_write_next[M_WRITE_ADDR]		=	1;
 				end
 	
-				m_write_state[M_WRITE_DATA] :	begin 
+				s_write_state[M_WRITE_DATA] :	begin 
 					if (saxi_wd_wvalid && saxi_wd_wready && saxi_wd_wlast)
-						m_write_next[M_WRITE_RESPONSE]	=	1;
+						s_write_next[M_WRITE_RESPONSE]	=	1;
 					else
-						m_write_next[M_WRITE_DATA]		=	1;
+						s_write_next[M_WRITE_DATA]		=	1;
 				end
 	
-				m_write_state[M_WRITE_RESPONSE]	:	begin 
+				s_write_state[M_WRITE_RESPONSE]	:	begin 
 					if (saxi_wb_bvalid && saxi_wb_bready)
-						m_write_next[M_WRITE_IDLE]		=	1;
+						s_write_next[M_WRITE_IDLE]		=	1;
 					else
-						m_write_next[M_WRITE_RESPONSE]	=	1;			
+						s_write_next[M_WRITE_RESPONSE]	=	1;			
 				end
 	
-				m_write_state[M_WRITE_TIME_OUT] :	begin 
-						m_write_next[M_WRITE_IDLE]		=	1;
+				s_write_state[M_WRITE_TIME_OUT] :	begin 
+						s_write_next[M_WRITE_IDLE]		=	1;
 				end
 														
-				default : m_write_next[M_WRITE_IDLE]		=	1;
+				default : s_write_next[M_WRITE_IDLE]		=	1;
 			endcase
 		end	
 	//*****************************************************************************
@@ -457,60 +457,60 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	//*****************************************************************************	
 		always @(posedge sys_clk) begin
 			if(sys_rst) begin
-				 m_wt_watch_dog_cnt	<=	0;
+				 s_wt_watch_dog_cnt	<=	0;
 			end else begin
-				 if (m_write_state != m_write_next)
-				 	m_wt_watch_dog_cnt	<=	0;
+				 if (s_write_state != s_write_next)
+				 	s_wt_watch_dog_cnt	<=	0;
 				 else
-				 	m_wt_watch_dog_cnt	<=	m_wt_watch_dog_cnt + 1; 
+				 	s_wt_watch_dog_cnt	<=	s_wt_watch_dog_cnt + 1; 
 			end
 		end
 	
 	//*****************************************************************************
 	// Write channel address signals
 	//*****************************************************************************	
-		//	m_waddr	m_wvalid
+		//	s_waddr	s_wvalid
 		always @(posedge sys_clk) begin
-			 if (m_write_state[M_WRITE_ADDR] && m_write_next[M_WRITE_ADDR]) begin
-				m_waddr	<=	C_ADDR_ETH2MOTOR;	//	user setting			 	
-			 	m_wvalid	<=	1;
+			 if (s_write_state[M_WRITE_ADDR] && s_write_next[M_WRITE_ADDR]) begin
+				s_waddr	<=	C_ADDR_ETH2MOTOR;	//	user setting			 	
+			 	s_wvalid	<=	1;
 			 end
 			 else begin 
-			 	m_waddr	<=	m_waddr;
-			 	m_wvalid	<=	0;			 	
+			 	s_waddr	<=	s_waddr;
+			 	s_wvalid	<=	0;			 	
 			 end
 		end
 	
-		//	m_wid
+		//	s_wid
 		always @(posedge sys_clk) begin
 			if(sys_rst) begin
-				 m_wid	<=	0;
+				 s_wid	<=	0;
 			end else begin
-				 if (m_write_state[M_WRITE_IDLE] && m_write_next[M_WRITE_ADDR])
-				 	m_wid	<=	m_wid + 1;
+				 if (s_write_state[M_WRITE_IDLE] && s_write_next[M_WRITE_ADDR])
+				 	s_wid	<=	s_wid + 1;
 				 else
-				 	m_wid	<=	m_wid;
+				 	s_wid	<=	s_wid;
 			end
 		end
 	
-		//	m_wlen	:	INCR bursts
+		//	s_wlen	:	INCR bursts
 		always @(posedge sys_clk) begin
 			if(sys_rst) begin
-				 m_wlen	<=	0;
+				 s_wlen	<=	0;
 			end else begin
-				 if (m_write_state[M_WRITE_IDLE] && m_write_next[M_WRITE_ADDR])
-				 	m_wlen	<=	0;			 			//	user setting
+				 if (s_write_state[M_WRITE_IDLE] && s_write_next[M_WRITE_ADDR])
+				 	s_wlen	<=	1;			 			//	user setting
 				 else
-				 	m_wlen	<=	m_wlen;
+				 	s_wlen	<=	s_wlen;
 			end
 		end	
 	
-		assign	saxi_wid	=	m_wid;
-		assign	saxi_waddr	=	m_waddr;
-		assign	saxi_wlen	=	m_wlen;
+		assign	saxi_wid	=	s_wid;
+		assign	saxi_waddr	=	s_waddr;
+		assign	saxi_wlen	=	s_wlen;
 		assign	saxi_wsize	=	AXI_SIZE;
 		assign	saxi_wburst	=	C_AXI_BURST_TYPE;
-		assign	saxi_wvalid	=	m_wvalid;
+		assign	saxi_wvalid	=	s_wvalid;
 	
 		// Not supported and hence assigned zeros
 		assign	saxi_wlock	=	2'b0;
@@ -521,6 +521,10 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 	//*****************************************************************************	
 		localparam	CMD_DATA	=	10'h078;
 		reg [9:0]	cmd_data	=	10'h008;
+		wire [31:0]	time_set;
+
+		assign	time_set	=	220000 - 200*cmd_data;
+
 		always_ff @(posedge sys_clk) begin
 			if(saxi_wb_bvalid && saxi_wb_bready) begin
 				cmd_data <= cmd_data + 1;
@@ -531,74 +535,81 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 
 		//	data count
 		always @(posedge sys_clk) begin
-			if (m_write_next[M_WRITE_IDLE])
-				m_write_data_cnt	<=	0;
-			else if (m_write_state[M_WRITE_ADDR] && m_write_next[M_WRITE_DATA])
-				m_write_data_cnt	<=	saxi_wlen;
+			if (s_write_next[M_WRITE_IDLE])
+				s_write_data_cnt	<=	0;
+			else if (s_write_state[M_WRITE_ADDR] && s_write_next[M_WRITE_DATA])
+				s_write_data_cnt	<=	saxi_wlen;
 			else if (saxi_wd_wvalid && saxi_wd_wready)
-				m_write_data_cnt	<=	m_write_data_cnt - 1;
+				s_write_data_cnt	<=	s_write_data_cnt - 1;
 			else
-				m_write_data_cnt	<=	m_write_data_cnt;
+				s_write_data_cnt	<=	s_write_data_cnt;
 		end
 	
-		//	m_wd_wdata
+		//	s_wd_wdata
 		always @(posedge sys_clk) begin
-			if (m_write_state[M_WRITE_DATA] && m_write_next[M_WRITE_DATA])
-				m_wd_wdata	<=	{MOTOR_ENABLE,MOTOR_POSITVE,{6'h0,cmd_data},16'h0};						//	user setting
+			if (s_write_state[M_WRITE_DATA] && s_write_next[M_WRITE_DATA])
+				if (saxi_wd_wvalid && saxi_wd_wready)
+					s_wd_wdata	<=	{time_set,32'h0};
+				else
+					s_wd_wdata	<=	{MOTOR_ENABLE,MOTOR_POSITVE,{6'h0,cmd_data},16'h0};						//	user setting
 			else begin 
-				m_wd_wdata	<=	0;				 	
+				s_wd_wdata	<=	0;				 	
 			end
 		end
 	
-		//	m_wd_wvalid
+		//	s_wd_wvalid
 		always @(posedge sys_clk) begin		 
-			 if (m_write_state[M_WRITE_DATA] && m_write_next[M_WRITE_DATA]) begin 
-			 	m_wd_wvalid	<=	1;	 				//	user setting
+			 if (s_write_state[M_WRITE_DATA] && s_write_next[M_WRITE_DATA]) begin 
+			 	s_wd_wvalid	<=	1;	 				//	user setting
 			 end 
 			 else begin 
-			 	m_wd_wvalid	<=	0;				 	
+			 	s_wd_wvalid	<=	0;				 	
 			 end		
 		end		
 	
-		//	m_wd_wlast
+		//	s_wd_wlast
 		always @(posedge sys_clk) begin		 
-			 if (m_write_state[M_WRITE_DATA] && m_write_next[M_WRITE_DATA]) begin 
-			 	m_wd_wlast	<=	(saxi_wlen == 0) ? 1 : (m_write_data_cnt == 1);	 				//	user setting
-			 end 
-			 else begin 
-			 	m_wd_wlast	<=	0;				 	
-			 end		
+			 if (s_write_state[M_WRITE_DATA] && s_write_next[M_WRITE_DATA]) begin
+			 	if (saxi_wlen == 0)										//	user setting					
+			 		s_wd_wlast	<=	1;
+			 	else if (s_write_data_cnt == 1 && saxi_wd_wready)
+			 		s_wd_wlast	<=	1;
+			 	else
+			 		s_wd_wlast	<=	s_wd_wlast;				 	
+			 end
+			 else
+			 	s_wd_wlast	<=	0;		
 		end	
 	
-		//	m_wd_wstrb
+		//	s_wd_wstrb
 		//	used in narrow transfer, data bytes mask, wstrb = 4'b0001 -> only last byte valid
 		always @(posedge sys_clk) begin
 			if(sys_rst) begin
-				m_wd_wstrb	<=	0;
+				s_wd_wstrb	<=	0;
 			end else begin
-				if (m_write_state[M_WRITE_DATA] && m_write_next[M_WRITE_DATA])
-					m_wd_wstrb	<=	{(C_AXI_DATA_WIDTH/8){1'b1}};
+				if (s_write_state[M_WRITE_DATA] && s_write_next[M_WRITE_DATA])
+					s_wd_wstrb	<=	{(C_AXI_DATA_WIDTH/8){1'b1}};
 				else
-					m_wd_wstrb	<=	0;
+					s_wd_wstrb	<=	0;
 			end
 		end
 	
-		assign	saxi_wd_wdata	=	m_wd_wdata;
-		assign	saxi_wd_wstrb	=	m_wd_wstrb;
-		assign	saxi_wd_wlast	=	m_wd_wlast;
-		assign	saxi_wd_wvalid	=	m_wd_wvalid;
+		assign	saxi_wd_wdata	=	s_wd_wdata;
+		assign	saxi_wd_wstrb	=	s_wd_wstrb;
+		assign	saxi_wd_wlast	=	s_wd_wlast;
+		assign	saxi_wd_wvalid	=	s_wd_wvalid;
 	
 	//*****************************************************************************
 	// Write channel response signals
 	//*****************************************************************************	
 		always @(posedge sys_clk) begin
-			if (m_write_state[M_WRITE_RESPONSE] && !m_wb_ready)
-				m_wb_ready <= saxi_wb_bvalid;
+			if (s_write_state[M_WRITE_RESPONSE] && !s_wb_ready)
+				s_wb_ready <= saxi_wb_bvalid;
 			else
-				m_wb_ready <= 0;
+				s_wb_ready <= 0;
 		end
 	
-		assign	saxi_wb_bready	=	m_wb_ready;	
+		assign	saxi_wb_bready	=	s_wb_ready;	
 	
 //*****************************************************************************
 // sdo
