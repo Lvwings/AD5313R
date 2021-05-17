@@ -32,9 +32,18 @@ module DEJITTER#(
     );
 
     reg	[C_HOLD_BIT_NUMBER - 1 : 0]	signal_hold	=	0;
-
+//*****************************************************************************
+// local reset
+//*****************************************************************************         
+    reg                         local_reset =   1'b0;
     always @(posedge sys_clk) begin
-    	if(sys_rst) begin
+        local_reset <=  sys_rst;
+    end
+//*****************************************************************************
+// dejitter - signal hold for C_HOLD_BIT_NUMBER bit make itself valid
+//*****************************************************************************     
+    always @(posedge sys_clk) begin
+    	if(local_reset) begin
     		signal_hold <= {C_HOLD_BIT_NUMBER{!C_INPUT_POLARITY}};
     	end else begin
     		signal_hold <= {signal_hold[C_HOLD_BIT_NUMBER - 2 : 0],signal_in};

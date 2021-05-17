@@ -85,9 +85,12 @@ module BLE_CTRL(
 						TIME_10US	=	32'h0000_07D0;
 
 	reg					o_alarm_reset	=	1'b0;
+	reg					alarm_out_n_d	=	1'b0;
 
-	always @(posedge sys_clk) begin 
-		if(!alarm_out_n) begin
+	always @(posedge sys_clk) begin
+		alarm_out_n_d	<=	alarm_out_n;
+
+		if(!alarm_out_n_d) begin
 			tmie_cnt <= tmie_cnt + 1;
 		end else if (motor_alarm_reset || alarm_reset) begin
 			tmie_cnt <= 0;
@@ -99,7 +102,7 @@ module BLE_CTRL(
 	always @(posedge sys_clk) begin
 		if(motor_alarm_reset) begin
 			o_alarm_reset <= 1;
-		end else if (tmie_cnt > TIME_10US) begin
+		end else if (tmie_cnt > TIME_10S) begin
 			o_alarm_reset <= 1;
 		end
 		else 

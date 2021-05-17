@@ -144,8 +144,8 @@ module DAC_CTRL  #(
 //*****************************************************************************
 // output register
 //*****************************************************************************			
+	reg								o_sclk		=	1'b1;	
 	reg								sclk_p		=	1'b1;
-	reg								sclk_n		=	1'b1;	
 	reg								o_sync_n	=	1'b1;
 	reg								o_sdin		=	1'b0;
 	reg								o_reset_n	=	1'b1;
@@ -155,7 +155,7 @@ module DAC_CTRL  #(
 	reg								o_alarm_reset		=	1'b0;
 	reg								o_trig_ad			=	1'b0;
 
-	assign							sclk		=	sclk_p & sclk_n	;	
+	assign							sclk		=	o_sclk;	
 	assign							sync_n		=	o_sync_n;
 	assign							sdin		=	o_sdin	;	
 	assign							reset_n		=	o_reset_n;	
@@ -170,11 +170,11 @@ module DAC_CTRL  #(
 
 // AXI write address channel signals
 
-	reg [C_AXI_ID_WIDTH-1:0]        s_wr_wid 	=	0;
-	reg [C_AXI_ADDR_WIDTH-1:0]      s_wr_waddr	=	0;
-	reg [7:0]                       s_wr_wlen	=	0;
-	reg [1:0]                       s_wr_wburst	=	0;
-	reg                             s_wr_wready	=	1'b0;
+	reg [C_AXI_ID_WIDTH-1:0]        s_wid 		=	0;
+	reg [C_AXI_ADDR_WIDTH-1:0]      s_waddr		=	0;
+	reg [7:0]                       s_wlen		=	0;
+	reg [1:0]                       s_wburst	=	0;
+	reg                             s_wready	=	1'b0;
 
 // AXI write data channel signals
 
@@ -204,6 +204,14 @@ module DAC_CTRL  #(
 	reg								s_rd_rvalid	=	1'b0;
 	reg [C_AXI_DATA_WIDTH-1:0]     	s_rd_rdata	=	0;  
 	reg 							s_rd_rlast	=	1'b0;
+//*****************************************************************************
+// local reset
+//*****************************************************************************			
+	reg							local_reset	=	1'b0;
+	always @(posedge sys_clk) begin
+		local_reset	<=	sys_rst;
+	end
+
 //*****************************************************************************
 // AXI support signals
 //*****************************************************************************	
@@ -247,7 +255,7 @@ module DAC_CTRL  #(
 // Write channel control signals
 //*****************************************************************************	
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
+		if(local_reset) begin
 			trig_write_start <= 0;
 		end else begin
 			trig_write_start <= saxi_wvalid;
@@ -263,12 +271,22 @@ module DAC_CTRL  #(
 	reg		flag_dac_read_over		=	1'b0;
 
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
+		if(local_reset) begin
 			s_write_state <= 9'b0_0010_0000;	//	RESET
 		end else begin
 			s_write_state	<= s_write_next;
 		end
 	end
+
+	reg 		flag_saxi_respond	=	1'b0;
+	reg 		flag_saxi_data		=	1'b0;
+	reg			flag_saxi_addr		=	1'b0;
+
+	always @(posedge sys_clk) begin
+		flag_saxi_addr		<=	saxi_waddr && saxi_wready;
+		flag_saxi_data		<=	saxi_wd_wvalid && saxi_wd_wready && saxi_wd_wlast;
+		flag_saxi_respond	<=	saxi_wb_bvalid && saxi_wb_bready;
+	end	
 
 	always @(*) begin
 		s_write_next	=	0;		//	next state reset
@@ -288,7 +306,7 @@ module DAC_CTRL  #(
 			end
 
 			s_write_state[S_WRITE_DATA] :	begin 
-				if (flag_read_over)
+				if (saxi_wd_wvalid && saxi_wd_wready && saxi_wd_wlast)
 					s_write_next[S_WRITE_RESPONSE]	=	1;
 				else
 					s_write_next[S_WRITE_DATA]		=	1;
@@ -340,8 +358,8 @@ module DAC_CTRL  #(
 // doing
 //*****************************************************************************			
 	reg	[4:0]	sclk_cnt	=	0;
-	localparam	TIME_RESET	=	5'd4,	//	100ns	:	reset time
-				TIME_SYNC	=	5'd10,	//	250ns	:	sync time
+	localparam	TIME_RESET	=	5'd4,	//	200ns	:	reset time
+				TIME_SYNC	=	5'd10,	//	500ns	:	sync time
 				BIT_SDI		=	5'd24;	
 
 	reg	[9:0]	dac_voltage		=	0;	
@@ -361,19 +379,46 @@ module DAC_CTRL  #(
 	reg	[2:0]	read_in_cnt 	=	0;
 	reg			dac_complete	=	1'b0;
 
-	reg [31:0]	time_set		=	0;
-	reg			flag_read_over	=	1'b0;
+	reg [31:0]	time_set		=	32'd1000000000;
+
+//*****************************************************************************
+// CMD
+//*****************************************************************************			
 
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			dac_voltage	<=	0;
-			time_set	<=	0;
+		if(local_reset) begin
+			dac_voltage			<=	0;
+			o_motor_state		<=	0;
+			o_alarm_reset		<=	0;
+			o_moter_direction	<=	1;
+		end else begin
+			if (saxi_wd_wready)
+				case (s_write_data_cnt)
+					5'd1	:	begin 
+						o_motor_state		<=	(saxi_wd_wdata[63:48] == MOTOR_ENABLE);
+						o_moter_direction	<=	(saxi_wd_wdata[47:32] == MOTOR_POSITVE);
+						dac_voltage			<=	 saxi_wd_wdata[25:16];
+						o_alarm_reset		<=	(saxi_wd_wdata[15:00] == ALARM_RESET);															
+					end
+					5'd0	:	begin 
+						time_set			<=	saxi_wd_wdata[63:32];
+					end
+					default : /* default */;
+				endcase	
+			else begin 
+				o_motor_state	<=	alarm_reset ? 0 : o_motor_state;
+			end
+		end
+	end
+
+	always @(posedge sys_clk) begin
+		if(local_reset) begin
+
 		end else begin
 			case (1)
 				s_write_next[S_WRITE_IDLE]	:	begin 
 												sclk_cnt	<=	0;
 												read_in_cnt	<=	0;
-												dac_voltage	<=	dac_voltage;
 												o_reset_n	<=	1;
 												o_sync_n	<=	1;
 												o_sdin		<=	0;
@@ -383,87 +428,68 @@ module DAC_CTRL  #(
 												flag_dac_read_over	<=	0;
 												flag_dac_sync_over	<=	0;
 												flag_dac_write_over	<=	0;
-												flag_dac_reset_over	<=	0;
-												flag_read_over		<=	0;
-
-												o_motor_state	<=	alarm_reset ? 0 : o_motor_state;
+												flag_dac_reset_over	<=	0;											
 				end	
 
 				s_write_next[S_WRITE_DATA]	:	begin 
-												if (saxi_wd_wvalid && saxi_wd_wready)
-													sclk_cnt	<=	sclk_cnt + 1;
-												else
-													sclk_cnt	<=	sclk_cnt;
-
-												case (sclk_cnt)
-													5'd1	:	begin 
-														o_motor_state		<=	(s_wd_wdata[63:48] == MOTOR_ENABLE);
-														o_moter_direction	<=	(s_wd_wdata[47:32] == MOTOR_POSITVE);
-														dac_voltage			<=	 s_wd_wdata[25:16];
-														o_alarm_reset		<=	(s_wd_wdata[15:00] == ALARM_RESET);															
-													end
-													5'd2	:	begin 
-														time_set			<=	s_wd_wdata[63:32];
-														flag_read_over		<=	1;
-													end
-													default : /* default */;
-												endcase											
+										
 				end
 
 				s_write_next[S_WRITE_RESPONSE]	:	begin 
-												sclk_cnt	<=	0;																		
+																	
 				end
 
 				s_write_next[DAC_RESET]			:	begin 
-												if (sclk_cnt == TIME_RESET) begin 
-													flag_dac_reset_over <=  1;
-													sclk_cnt			<=	0;
-												end
-												else begin 
-													if (!sclk_p && sclk_n)
-														sclk_cnt	<=	sclk_cnt + 1;
+												if (sclk_p && !sclk) begin	//	rising edge of sclk
+													if (sclk_cnt  == TIME_RESET - 1) begin 
+														flag_dac_reset_over <=  1;
+														sclk_cnt			<=	0;
+														o_reset_n			<=	1;															
+													end
 													else
-														sclk_cnt	<=	sclk_cnt;													
+														sclk_cnt	<=	sclk_cnt + 1;
 												end
-												o_reset_n          	<=  !(sclk_cnt  < TIME_RESET);												
+												else begin
+													sclk_cnt	<=	sclk_cnt;
+												end																																					
 				end
 
 				s_write_next[DAC_SYNC]			:	begin 
-												if ((sclk_cnt == TIME_SYNC - 1) && (!sclk_p && sclk_n)) begin 
-													flag_dac_sync_over 	<=  1;
-													sclk_cnt			<=	0;
-													o_sync_n			<=	0;
-												end
-												else begin 
-													if (!sclk_p && sclk_n)
-														sclk_cnt	<=	sclk_cnt + 1;
+												if (sclk_p && !sclk) begin
+													if (sclk_cnt == TIME_SYNC - 1) begin
+														flag_dac_sync_over 	<=  1;
+														sclk_cnt			<=	0;
+														o_sync_n			<=	0;															
+													end
 													else
-														sclk_cnt	<=	sclk_cnt;													
-												end	
-
+														sclk_cnt	<=	sclk_cnt + 1;
+												end
+												else begin
+													sclk_cnt	<=	sclk_cnt;
+												end													
 				end
 
 				s_write_next[DAC_WRITE]			:	begin 
 												flag_dac_sync_over 	<=  0;
 
-												if ((sclk_cnt == BIT_SDI - 1) && (!sclk_p && sclk_n)) begin 
-													flag_dac_write_over <=  1;
-													sclk_cnt			<=	0;
-													o_sdin				<=	0;
-													o_sync_n			<=	1;
-												end
-												else begin 
-													if (!sclk_p && sclk_n) begin 
-														o_sdin	<=	dac_code[23 - (sclk_cnt + 1)];
-														sclk_cnt	<=	sclk_cnt + 1;
-													end														
+												if (sclk_p && !sclk) begin
+													if (sclk_cnt == BIT_SDI - 1) begin
+														flag_dac_write_over <=  1;
+														sclk_cnt			<=	0;
+														o_sdin				<=	0;
+														o_sync_n			<=	1;
+													end
 													else begin 
-														sclk_cnt	<=	sclk_cnt;
-														o_sdin		<=	(sclk_cnt == 0) ? dac_code[23] : o_sdin;
-													end																											
-												end
+														o_sdin				<=	dac_code[23 - (sclk_cnt + 1)];
+														sclk_cnt			<=	sclk_cnt + 1;															
+													end
+												end														
+												else begin 
+													sclk_cnt	<=	sclk_cnt;
+													o_sdin		<=	(sclk_cnt == 0) ? dac_code[23] : o_sdin;
+												end																											
 												
-												if (read_in_cnt == 3 && sclk_p && !sclk_n)		//	read when write [nop]
+												if (read_in_cnt == 3 && !sclk_p && sclk)		//	read when write [nop] negedge sclk
 													dac_read[23 - sclk_cnt]	<=	sdo;
 												else
 													dac_read	<=	dac_read;
@@ -493,31 +519,26 @@ module DAC_CTRL  #(
 reg	[31:0]	trig_cnt	=	0;
 
 always @(posedge sys_clk) begin
-	if(sys_rst) begin
-		 trig_cnt	<=	0;
-		 o_trig_ad	<=	0;
-	end else begin
-		 if (motor_state) begin 
-		 	if (trig_cnt == time_set) begin 
-			 	trig_cnt	<=	0;
-			 	o_trig_ad	<=	1;		 		
-		 	end
-		 	else begin 
-		 		trig_cnt	<=	trig_cnt + 1;
-			 	o_trig_ad	<=	0;	
-		 	end
-		 end
-		 else begin 
+	 if (motor_state) begin 
+	 	if (trig_cnt == time_set) begin 
 		 	trig_cnt	<=	0;
-		 	o_trig_ad	<=	0;
-		 end
-	end
+		 	o_trig_ad	<=	1;		 		
+	 	end
+	 	else begin 
+	 		trig_cnt	<=	trig_cnt + 1;
+		 	o_trig_ad	<=	0;	
+	 	end
+	 end
+	 else begin 
+	 	trig_cnt	<=	0;
+	 	o_trig_ad	<=	0;
+	 end
 end
 //*****************************************************************************
 // sclk generate
 //*****************************************************************************			
 	reg	[7:0]	time_cnt		=	0;
-	localparam	TIME_SCLK		=	8'd5;	//	25ns	:	sclk period
+	localparam	TIME_SCLK		=	8'd10;	//	50ns	:	sclk period
 
 	always @(posedge sys_clk) begin
 		//	sclk cnt
@@ -528,74 +549,60 @@ end
 	end
 	
 	always @(posedge sys_clk) begin
-			sclk_p	<=	(time_cnt <= 2);
+			o_sclk	<=	(time_cnt < (TIME_SCLK/2));
+			sclk_p	<=	(time_cnt < (TIME_SCLK/2 - 1)) || (time_cnt == TIME_SCLK - 1);
 	end
 
-	always @(negedge sys_clk) begin
-			sclk_n	<=	(time_cnt <= 2);
-	end	
 //*****************************************************************************
 // Watch dog signals
 //*****************************************************************************	
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			 s_wt_watch_dog_cnt	<=	0;
-		end else begin
-			 if (s_write_state != s_write_next)
-			 	s_wt_watch_dog_cnt	<=	0;
-			 else
-			 	s_wt_watch_dog_cnt	<=	s_wt_watch_dog_cnt + 1; 
-		end
+		 if (s_write_state != s_write_next)
+		 	s_wt_watch_dog_cnt	<=	0;
+		 else
+		 	s_wt_watch_dog_cnt	<=	s_wt_watch_dog_cnt + 1; 
 	end	
 
 //*****************************************************************************
 // Write channel address signals
 //*****************************************************************************	
-	//	s_wr_wready
+	//	s_wready
 	always @(posedge sys_clk) begin
 		if (s_write_state[S_WRITE_IDLE] && s_write_next[S_WRITE_ADDR])
-			s_wr_wready	<=	1;
+			s_wready	<=	1;
 		else
-			s_wr_wready	<=	0;
+			s_wready	<=	0;
 	end
 
-	//	s_wr_wid
+	//	s_wid
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			 s_wr_wid	<=	0;
-		end else begin
-			 if (saxi_wvalid && saxi_wready)
-			 	s_wr_wid	<=	saxi_wid;
-			 else
-			 	s_wr_wid	<=	s_wr_wid;
-		end
+		 if (saxi_wvalid && saxi_wready)
+		 	s_wid	<=	saxi_wid;
+		 else
+		 	s_wid	<=	s_wid;
 	end
 
-	//	s_wr_wlen	:	INCR bursts
+	//	s_wlen	:	INCR bursts
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			 s_wr_wlen	<=	0;
+		if(local_reset) begin
+			 s_wlen	<=	0;
 		end else begin
 			 if (saxi_wvalid && saxi_wready)
-			 	s_wr_wlen	<=	saxi_wlen + 1;
+			 	s_wlen	<=	saxi_wlen + 1;
 			 else
-			 	s_wr_wlen	<=	s_wr_wlen;
+			 	s_wlen	<=	s_wlen;
 		end
 	end	
 
-	//	s_wr_wburst	
+	//	s_wburst	
 	//	C_EN_WRAP_TRANS :0 INCR bursts :support burst_len max to 256 (default) 	
 	//	C_EN_WRAP_TRANS :1 WRAP bursts :support burst_len 2,4,8,16 				
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			s_wr_wburst	<=	0;
-		end else begin
-			s_wr_wburst	<=	saxi_wburst;	
-		end
+			s_wburst	<=	saxi_wburst;	
 	end	
 
 	//	output
-	assign	saxi_wready	=	s_wr_wready;
+	assign	saxi_wready	=	s_wready;
 
 //*****************************************************************************
 // Write channel data signals
@@ -615,21 +622,17 @@ end
 	//	s_wd_wready
 	always @(posedge sys_clk) begin
 		if (s_write_state[S_WRITE_DATA] && s_write_next[S_WRITE_DATA])
-			s_wd_wready	<=	saxi_wd_wvalid;		//	user setting
+			s_wd_wready	<=	1;		//	user setting
 		else
 			s_wd_wready	<=	0;
 	end	
 
 	//	s_wd_wdata
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			 s_wd_wdata     <= 0;			 
-		end else begin
-			if (saxi_wd_wready && saxi_wd_wvalid)
-				s_wd_wdata	<=	saxi_wd_wdata;		//	user setting
-			else
-				s_wd_wdata	<=	s_wd_wdata;
-		end
+		if (saxi_wd_wready && saxi_wd_wvalid)
+			s_wd_wdata	<=	saxi_wd_wdata;		//	user setting
+		else
+			s_wd_wdata	<=	s_wd_wdata;
 	end
 	//	output
 	assign	saxi_wd_wready	=	s_wd_wready;
@@ -638,7 +641,7 @@ end
 // Write channel response signals
 //*****************************************************************************	
 	always @(posedge sys_clk) begin
-		if (s_write_next[S_WRITE_RESPONSE])
+		if (s_write_state[S_WRITE_RESPONSE] && s_write_next[S_WRITE_RESPONSE])
 			s_wb_bvalid <= 1;
 		else
 			s_wb_bvalid <= 0;
@@ -700,17 +703,26 @@ end
 	end
 
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			trig_m_write_start <= 0;
-		end else begin
+		if (m_write_state[M_WRITE_IDLE])
 			trig_m_write_start <= flag_sum;			//	user setting
-		end
+		else
+			trig_m_write_start <= 0;
 	end
 //*****************************************************************************
 // flag_sum
 //*****************************************************************************			
+	reg 		flag_maxi_respond	=	1'b0;
+	reg 		flag_maxi_data		=	1'b0;
+	reg			flag_maxi_addr		=	1'b0;
+
 	always @(posedge sys_clk) begin
-		if(maxi_wb_bvalid && maxi_wb_bready) begin
+		flag_maxi_addr		<=	maxi_waddr && maxi_wready;
+		flag_maxi_data		<=	maxi_wd_wvalid && maxi_wd_wready && maxi_wd_wlast;
+		flag_maxi_respond	<=	maxi_wb_bvalid && maxi_wb_bready;
+	end
+
+	always @(posedge sys_clk) begin
+		if(flag_maxi_respond) begin
 			 flag_sum <= 0;
 		end else begin
 			 flag_sum <= (flag_dac_read_over || (alarm_in_n_d && !alarm_in_n) || (alarm_reset_d && !alarm_reset)) ? 1 : flag_sum;
@@ -721,6 +733,9 @@ end
 	reg	[31:0]	data_sum		=	0;
 	reg	[15:0]	data_complete	=	0;
 	reg [15:0]	alarm_complete	=	0;
+	reg	[31:0]	time_set_sum	=	0;
+	reg [31:0]	complete_sum	=	0;
+	reg [31:0]	data2eth_sum	=	0;
 
 	always @(posedge sys_clk) begin
 		if(flag_sum) begin
@@ -728,14 +743,23 @@ end
 			data2eth[47:32]	<=	motor_direction ? MOTOR_POSITVE : 0;
 			data2eth[31:16]	<=	dac_voltage;
 			data2eth[15:00]	<=	!alarm_in_n ? ALARM_OUT : 0;
-			data_sum		<=	data2eth[63:48] + data2eth[47:32] + data2eth[31:16] + data2eth[15:00] + data_complete + alarm_complete + time_set[31:16] + time_set[15:00]; 
-		end else if (maxi_wb_bvalid && maxi_wb_bready) begin
+			time_set_sum	<=	time_set[31:16] + time_set[15:00];
+			complete_sum	<=	data_complete + alarm_complete;
+			data2eth_sum	<=	data2eth[63:48] + data2eth[47:32] + data2eth[31:16] + data2eth[15:00];
+			data_sum		<=	time_set_sum + complete_sum + data2eth_sum; 
+		end else if (flag_maxi_respond) begin
 			data2eth 	<=	0;
 			data_sum	<=	0;
+			time_set_sum<=	0;
+			complete_sum<=	0;
+			data2eth_sum<=	0;
 		end
 		else begin 
 			data2eth 	<=	data2eth;
-			data_sum	<=	data_sum;			
+			data_sum	<=	data_sum;
+			time_set_sum<=	time_set_sum;
+			complete_sum<=	complete_sum;
+			data2eth_sum<=	data2eth_sum;						
 		end
 	end
 
@@ -750,7 +774,7 @@ end
 	always @(posedge sys_clk) begin
 		if(alarm_reset_d && !alarm_reset)
 			alarm_complete <= ALARM_RESET;
-		else if (!flag_sum && maxi_wb_bvalid && maxi_wb_bready)
+		else if (!flag_sum && flag_maxi_respond)
 			alarm_complete <= 0;
 		else 
 			alarm_complete <= alarm_complete;
@@ -759,7 +783,7 @@ end
 // Write data state machine
 //*****************************************************************************
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
+		if(local_reset) begin
 			m_write_state <= 1;
 		end else begin
 			m_write_state	<= m_write_next;
@@ -791,9 +815,7 @@ always @(*) begin
 			end
 
 			m_write_state[M_WRITE_RESPONSE]	:	begin 
-				if (maxi_wb_bvalid && maxi_wb_bready && flag_sum)
-					m_write_next[M_WRITE_ADDR]		=	1;
-				else if (maxi_wb_bvalid && maxi_wb_bready)
+				if (maxi_wb_bvalid && maxi_wb_bready)
 					m_write_next[M_WRITE_IDLE]		=	1;
 				else
 					m_write_next[M_WRITE_RESPONSE]	=	1;			
@@ -810,14 +832,10 @@ always @(*) begin
 // Watch dog signals
 //*****************************************************************************	
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			 m_wt_watch_dog_cnt	<=	0;
-		end else begin
-			 if (m_write_state != m_write_next)
-			 	m_wt_watch_dog_cnt	<=	0;
-			 else
-			 	m_wt_watch_dog_cnt	<=	m_wt_watch_dog_cnt + 1; 
-		end
+		 if (m_write_state != m_write_next)
+		 	m_wt_watch_dog_cnt	<=	0;
+		 else
+		 	m_wt_watch_dog_cnt	<=	m_wt_watch_dog_cnt + 1; 
 	end
 
 //*****************************************************************************
@@ -837,10 +855,10 @@ always @(*) begin
 
 	//	m_wid
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
+		if(local_reset) begin
 			 m_wid	<=	0;
 		end else begin
-			 if (m_write_state[M_WRITE_IDLE] && m_write_next[M_WRITE_ADDR])
+			 if (m_write_state[M_WRITE_IDLE] && trig_m_write_start)
 			 	m_wid	<=	m_wid + 1;
 			 else
 			 	m_wid	<=	m_wid;
@@ -849,14 +867,10 @@ always @(*) begin
 
 	//	m_wlen	:	INCR bursts
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
-			 m_wlen	<=	0;
-		end else begin
-			 if (m_write_state[M_WRITE_ADDR] && m_write_next[M_WRITE_ADDR])
-			 	m_wlen	<=	flag_sum ? (1 - 1) : (2 - 1);			 			//	user setting
-			 else
-			 	m_wlen	<=	m_wlen;
-		end
+		 if (m_write_state[M_WRITE_ADDR] && m_write_next[M_WRITE_ADDR])
+		 	m_wlen	<=	flag_sum ? (1 - 1) : (2 - 1);			 			//	user setting
+		 else
+		 	m_wlen	<=	m_wlen;
 	end	
 
 	assign	maxi_wid	=	m_wid;
@@ -930,14 +944,10 @@ always @(*) begin
 	//	m_wd_wstrb
 	//	used in narrow transfer, data bytes mask, wstrb = 4'b0001 -> only last byte valid
 	always @(posedge sys_clk) begin
-		if(sys_rst) begin
+		if (m_write_state[M_WRITE_DATA] && m_write_next[M_WRITE_DATA])
+			m_wd_wstrb	<=	{(C_AXI_DATA_WIDTH/8){1'b1}};
+		else
 			m_wd_wstrb	<=	0;
-		end else begin
-			if (m_write_state[M_WRITE_DATA] && m_write_next[M_WRITE_DATA])
-				m_wd_wstrb	<=	{(C_AXI_DATA_WIDTH/8){1'b1}};
-			else
-				m_wd_wstrb	<=	0;
-		end
 	end
 
 	assign	maxi_wd_wdata	=	m_wd_wdata;

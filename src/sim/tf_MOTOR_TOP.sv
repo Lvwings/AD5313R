@@ -249,7 +249,6 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 		saxi_wd_wstrb  <= '0;
 		saxi_wd_wlast  <= '0;
 		saxi_wd_wvalid <= '0;
-		saxi_wb_bready <= '0;
 		saxi_rid       <= '0;
 		saxi_raddr     <= '0;
 		saxi_rlen      <= '0;
@@ -609,7 +608,7 @@ module tb_MOTOR_TOP (); /* this is automatically generated */
 				s_wb_ready <= 0;
 		end
 	
-		assign	saxi_wb_bready	=	s_wb_ready;	
+		assign	saxi_wb_bready	=	1;	
 	
 //*****************************************************************************
 // sdo
